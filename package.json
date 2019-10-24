@@ -1,0 +1,12 @@
+{
+	"name": "magento-boilerplate",
+	"version": "0.0.1",
+	"main": "index.js",
+	"repository": "https://github.com/workwithizzi/magento-boilerplate.git",
+	"author": "Yisrael Grimes <yisraelgrimes@gmail.com>",
+	"license": "MIT",
+	"scripts": {
+		"docker": "docker-compose up -d",
+		"shell": "docker exec -it magento-boilerplate_magento_1 bash"
+	}
+}
