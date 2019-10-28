@@ -1,19 +1,19 @@
-version: '2.1'
+version: "2.1"
 
 services:
   mariadb:
-    image: 'mariadb:latest'
+    image: "mariadb:latest"
     environment:
       - MYSQL_ROOT_PASSWORD=password
       - MYSQL_DATABASE=magento
     healthcheck:
-      test: "/usr/bin/mysql --user=root --password=password --execute \"SHOW DATABASES;\""
+      test: '/usr/bin/mysql --user=root --password=password --execute "SHOW DATABASES;"'
       timeout: 5s
       retries: 20
     volumes:
-      - 'magento_database:/var/lib/mysql'
+      - "magento_database:/var/lib/mysql"
   magento:
-    image: 'jamesbrink/magento:2.2-sd'
+    image: "jamesbrink/magento:2.2-sd"
     environment:
       - MARIADB_HOST=mariadb
       - MARIADB_PORT_NUMBER=3306
@@ -25,12 +25,12 @@ services:
       - ENABLE_SAMPLE_DATA=true
       - APACHE_LOG_LEVEL=warn
     ports:
-      - '80:80'
-      - '443:443'
-    # volumes:
-    #   - './themes:/magento/htdocs/app/design/frontend/Izzi'
-      # If custom Module development:
-      # - './modules:/magento/htdocs/app/code/Izzi'
+      - "80:80"
+      - "443:443"
+    volumes:
+      - "./themes:/magento/htdocs/app/design/frontend/Izzi"
+    # For custom Module development:
+    # - './modules:/magento/htdocs/app/code/Izzi'
     depends_on:
       mariadb:
         condition: service_healthy
