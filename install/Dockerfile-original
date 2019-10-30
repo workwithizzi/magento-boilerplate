@@ -1,38 +1,30 @@
 # Magento
+#
+# VERSION 2.2
 
-FROM alpine:3.7
+FROM jamesbrink/php:7.1
 
 # Build ARGs.
-ARG IMAGE_VERSION=0.0.1
-# ARG MAGENTO_VERSION=2.3.3
-ARG MAGERUN_VERSION=3.2.0
-ARG IMPORT_SAMPLE_DATA="true"
-ARG USER="mag"
-ARG HOME_DIR="/mag"
-ARG USER_GROUP="magGroup"
-
-ENV MAGENTO_VERSION=2.3.3
+ARG VCS_REF
+ARG BUILD_DATE
+ARG MAGENTO_VERSION=2.2.3
+ARG MAGERUN_VERSION=2.1.0
+ARG ENABLE_SAMPLE_DATA="true"
 
 #Labels
-LABEL maintainer="Yisrael Grimes, yisraelgrimes@gmail.com"
-LABEL decription="Magento 2"
-LABEL version=$MAGENTO_VERSION
-LABEL url="https://github.com/workwithizzi/magento-boilerplate"
-LABEL org.label-schema.schema-version=$IMAGE_VERSION
-
+LABEL maintainer="James Brink, brink.james@gmail.com" \
+	decription="Magento 2" \
+	version="2.2.3" \
+	org.label-schema.name="magento" \
+	org.label-schema.build-date=$BUILD_DATE \
+	org.label-schema.vcs-ref=$VCS_REF \
+	org.label-schema.vcs-url="https://github.com/jamesbrink/docker-magento" \
+	org.label-schema.schema-version="1.0.0-rc1"
 
 # Create our non-priviledged user that will run magento.
-# Group = magGroup
-# Username = mag
-# Home dir = /mag
-# Login Shell = sh
-RUN addgroup -S ${USER_GROUP} && adduser -S -h ${HOME_DIR} -s /bin/sh -G ${USER_GROUP} ${USER}
-
+RUN addgroup -S magento && adduser -S -h /magento -s /bin/sh -G magento magento
 
 # Install all build-deps and then install magento.
-# --no-cache  Do not use any local cache path
-# --virtual   Create a virtual package called 'runtime-deps'
-# --update    Get the latest list of available packages
 RUN apk --no-cache --update --virtual runtime-deps add \
 	bash \
 	freetype \
@@ -76,7 +68,6 @@ RUN apk --no-cache --update --virtual runtime-deps add \
 	pkgconf \
 	pkgconfig \
 	re2c \
-	# Here's where the install kept crashing.
 	&& pecl install xdebug \
 	&& docker-php-ext-install iconv mcrypt intl xsl zip pdo_mysql soap \
 	&& docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
@@ -88,35 +79,35 @@ RUN apk --no-cache --update --virtual runtime-deps add \
 	&& php -r "unlink('composer-setup.php');" \
 	&& mv composer.phar /usr/local/bin/composer \
 	&& setcap cap_net_bind_service=+ep /usr/sbin/httpd \
-	&& mkdir -p ${HOME_DIR}/htdocs \
-	&& mkdir -p ${HOME_DIR}/logs \
-	&& mkdir -p ${HOME_DIR}/cgi-bin \
-	&& mkdir -p ${HOME_DIR}/bin \
-	&& chown --recursive ${USER}:${USER_GROUP} ${HOME_DIR} \
-	&& su ${USER} -c "composer create-project magento/community-edition:${MAGENTO_VERSION} ${HOME_DIR}/htdocs/" \
-	&& su ${USER} -c "cd ${HOME_DIR}/htdocs && composer install" \
-	&& su ${USER} -c "cd ${HOME_DIR}/htdocs && composer require --no-update n98/magerun2:${MAGERUN_VERSION}" \
-	&& su ${USER} -c "cd ${HOME_DIR}/htdocs && composer update" \
-	&& su ${USER} -c "cd ${HOME_DIR}/htdocs && composer clear-cache" \
+	&& mkdir -p /magento/htdocs \
+	&& mkdir -p /magento/logs \
+	&& mkdir -p /magento/cgi-bin \
+	&& mkdir -p /magento/bin \
+	&& chown -R magento:magento /magento \
+	&& su magento -c "composer create-project magento/community-edition:${MAGENTO_VERSION} /magento/htdocs/" \
+	&& su magento -c "cd /magento/htdocs && composer install" \
+	&& su magento -c "cd /magento/htdocs && composer require --no-update n98/magerun2:${MAGERUN_VERSION}" \
+	&& su magento -c "cd /magento/htdocs && composer update" \
+	&& su magento -c "cd /magento/htdocs && composer clear-cache" \
 	&& apk del build-deps \
-	&& chown --recursive ${USER}:${USER_GROUP} /run/apache2 \
-	&& chown --recursive ${USER}:${USER_GROUP} /etc/apache2 \
+	&& chown -R magento:magento /run/apache2 \
+	&& chown -R magento:magento /etc/apache2 \
 	&& echo -e "date.timezone=America/Chicago\nmemory_limit=2G\nasp_tags=off\n" > /usr/local/etc/php/php.ini
 
 # Switch to non-priviledged user.
-USER ${USER}
+USER magento
 
 # Set our working directory.
-WORKDIR ${HOME_DIR}/
+WORKDIR /magento/
 
 # Install sample data if needed.
-RUN if [ "${IMPORT_SAMPLE_DATA}" = "true" ]; then \
-	cd ${HOME_DIR}/ \
-	&& curl -L -O https://github.com${HOME_DIR}/magento2-sample-data/archive/${MAGENTO_VERSION}.tar.gz \
+RUN if [ "${ENABLE_SAMPLE_DATA}" = "true" ]; then \
+	cd /magento/ \
+	&& curl -L -O https://github.com/magento/magento2-sample-data/archive/${MAGENTO_VERSION}.tar.gz \
 	&& tar xfvz ${MAGENTO_VERSION}.tar.gz \
 	&& rm ${MAGENTO_VERSION}.tar.gz \
 	&& mv magento2-sample-data-${MAGENTO_VERSION} sample-data \
-	&& php -f ${HOME_DIR}/sample-data/dev/tools/build-sample-data.php -- --ce-source=${HOME_DIR}/htdocs/; \
+	&& php -f /magento/sample-data/dev/tools/build-sample-data.php -- --ce-source=/magento/htdocs/; \
 	fi
 
 # Copy assets into the container.
@@ -136,7 +127,7 @@ ENV APACHE_HTTPS_PORT_NUMBER="443" \
 	MAGENTO_MODE="developer" \
 	MAGENTO_PASSWORD="password1" \
 	MAGENTO_USERNAME="admin" \
-	MAGENTO_HOME="${HOME_DIR}/htdocs" \
+	MAGENTO_HOME="/magento/htdocs" \
 	MARIADB_HOST="mariadb" \
 	MARIADB_PORT_NUMBER="3306" \
 	MARIADB_ROOT_PASSWORD="password" \
@@ -145,15 +136,15 @@ ENV APACHE_HTTPS_PORT_NUMBER="443" \
 	REDIS_PORT="6379" \
 	VARNISH_HOST="" \
 	MOD_PAGESPEED_ENABLED="true" \
-	IMPORT_SAMPLE_DATA="false" \
-	PATH="${HOME_DIR}/htdocs/bin:${HOME_DIR}/htdocs/vendor/bin/:${HOME_DIR}/htdocs/vendor/n98/magerun2/bin:$PATH"
+	ENABLE_SAMPLE_DATA="false" \
+	PATH="/magento/htdocs/bin:/magento/htdocs/vendor/bin/:/magento/htdocs/vendor/n98/magerun2/bin:$PATH"
 
 USER root
-RUN chown --recursive ${USER}:${USER_GROUP} /etc/apache2
-USER ${USER}
+RUN chown -R magento:magento /etc/apache2
+USER magento
 
 # Expose http and https ports.
 EXPOSE 80 443
 
-# Setup some helpful commands.
+# Set out default command.
 CMD ["/usr/local/bin/entrypoint.sh"]

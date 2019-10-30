@@ -50,22 +50,6 @@ enabled_xdebug() {
 	echo "xdebug.remote_autostart=off" >>/usr/local/etc/php/conf.d/xdebug.ini
 }
 
-compile_sass() {
-	if [[ "$MAGENTO_MODE" == "developer" && -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
-		echo "Starting SASS backround task."
-		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
-		npx gulp watch &
-		gulp_pid="$!"
-		trap "echo 'Stopping SASS background task - pid: $gulp_pid'; kill -SIGTERM $gulp_pid" SIGINT SIGTERM
-		cd - || return
-	elif [[ -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
-		echo "Compiling SASS"
-		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
-		npx gulp styles --prod &
-		cd - || return
-	fi
-}
-
 enable_redis() {
 	mv "$MAGENTO_HOME/app/etc/env.php" "$MAGENTO_HOME/app/etc/env.php.orig"
 	echo "Enabling Redis Cache"
@@ -137,7 +121,7 @@ if [ ! -e $MAGENTO_HOME/app/etc/env.php ]; then
 		echo "Waiting for MariaDB"
 		sleep 10
 	done
-	
+
 	# Enable Redis for cache if redis hostname is supplied.
 	if [ "$REDIS_HOST" != "" ]; then
 		enable_redis
