@@ -1,0 +1,60 @@
+version: "3"
+
+services:
+  magento:
+    build: .
+    image: magento
+    container_name: magento
+    ports:
+      - "80:80"
+      - "443:443"
+    # volumes:
+      # - "../themes:/magento/htdocs/app/design/frontend/Izzi"
+    # For custom Module development:
+    # - '../modules:/magento/htdocs/app/code/Izzi'
+    depends_on:
+      - db
+  db:
+    image: "mariadb:latest"
+    container_name: db
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=magento
+      - MYSQL_USER=mag
+    healthcheck:
+      test: '/usr/bin/mysql --user=root --password=password --execute "SHOW DATABASES;"'
+      timeout: 5s
+      retries: 20
+    # volumes:
+    #   - "magento_database:/var/lib/mysql"
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin
+    ports:
+      - "8580:80"
+    links:
+      - db
+  apache-ssl:
+    image: "birgerk/apache-letsencrypt"
+    container_name: apache-ssl
+    environment:
+      - DOMAINS=local.magento
+      - WEBMASTER_MAIL=webmaster@example.com
+      - APACHE_HTTP_PORT_NUMBER="80"
+    ports:
+      - "9000:9000"
+  redis:
+    image: redis
+    container_name: redis
+    ports:
+      - "6379"
+  varnish:
+    image: varnish
+    container_name: varnish
+  # elasticsearch:
+  #   image: elasticsearch
+  #   container_name: elasticsearch
+
+# volumes:
+#   magento_database:
+#     driver: local
