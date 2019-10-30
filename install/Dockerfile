@@ -18,6 +18,7 @@ LABEL version=$MAGENTO_VERSION
 LABEL url="https://github.com/workwithizzi/magento-boilerplate"
 LABEL org.label-schema.schema-version=$IMAGE_VERSION
 
+
 # Create our non-priviledged user that will run magento.
 # Group = magGroup
 # Username = mag
