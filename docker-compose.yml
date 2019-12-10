@@ -13,7 +13,7 @@ services:
     volumes:
       - "magento_database:/var/lib/mysql"
   magento:
-    image: "jamesbrink/magento:2.2-sd"
+    build: ./install
     environment:
       - MARIADB_HOST=mariadb
       - MARIADB_PORT_NUMBER=3306
@@ -21,28 +21,31 @@ services:
       - MAGENTO_DATABASE_PASSWORD=password
       - MAGENTO_DATABASE_NAME=magento
       - MAGENTO_ADMINURI=admin
-      - MAGENTO_HOST=local.magento
+      - MAGENTO_HOST=94.16.113.25
       - ENABLE_SAMPLE_DATA=true
       - APACHE_LOG_LEVEL=warn
-    ports:
-      - "80:80"
-      - "443:443"
+    command: php-fpm
+    links:
+        - mariadb
     volumes:
       - "./themes:/magento/htdocs/app/design/frontend/Izzi"
-    # For custom Module development:
+      - asset-volume:/mag:rw
     # - './modules:/magento/htdocs/app/code/Izzi'
     depends_on:
       mariadb:
         condition: service_healthy
   # ? How to connect phpmyadmin to the db?
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
+  apache:
+    image: 'bitnami/apache:latest'
     ports:
-      - "8580:80"
-    links:
-      - mariadb
-
+      - '80:8080'
+      - '443:8443'
+    volumes:
+      - asset-volume:/mag:rw
+      - ./install/docker-assets/etc/apache2/conf.d/magento.conf:/vhosts/magento.conf:ro
+    links: 
+      - magento
 volumes:
   magento_database:
     driver: local
+  asset-volume: ~

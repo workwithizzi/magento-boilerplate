@@ -4,7 +4,23 @@
 # timestamp="date +\"%Y-%m-%d %H:%M:%S\""
 # alias echo="echo \"$(eval $timestamp) -$@\""
 
-cd "$MAGENTO_HOME" || exit
+cd "$MAGENTO_HOME"
+
+compile_sass() {
+	if [[ "$MAGENTO_MODE" == "developer" && -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
+		echo "Starting SASS backround task."
+		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
+		npx gulp watch &
+		gulp_pid="$!"
+		trap "echo 'Stopping SASS background task - pid: $gulp_pid'; kill -SIGTERM $gulp_pid" SIGINT SIGTERM
+		cd - || return
+	elif [[ -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
+		echo "Compiling SASS"
+		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
+		npx gulp styles --prod &
+		cd - || return
+	fi
+}
 
 install_magento() {
 	magento setup:install --base-url="http://$MAGENTO_HOST/" \
@@ -48,22 +64,6 @@ enabled_xdebug() {
 	echo "zend_extension=$(find /usr/local/lib/php/extensions/ -name xdebug.so)" >/usr/local/etc/php/conf.d/xdebug.ini
 	echo "xdebug.remote_enable=on" >>/usr/local/etc/php/conf.d/xdebug.ini
 	echo "xdebug.remote_autostart=off" >>/usr/local/etc/php/conf.d/xdebug.ini
-}
-
-compile_sass() {
-	if [[ "$MAGENTO_MODE" == "developer" && -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
-		echo "Starting SASS backround task."
-		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
-		npx gulp watch &
-		gulp_pid="$!"
-		trap "echo 'Stopping SASS background task - pid: $gulp_pid'; kill -SIGTERM $gulp_pid" SIGINT SIGTERM
-		cd - || return
-	elif [[ -e /var/www/html/vendor/snowdog/frontools/package.json ]]; then
-		echo "Compiling SASS"
-		cd "$MAGENTO_HOME/vendor/snowdog/frontools" || return
-		npx gulp styles --prod &
-		cd - || return
-	fi
 }
 
 enable_redis() {
@@ -123,21 +123,18 @@ if [ "$VARNISH_HOST" != "" ];then
 	change_apache_port 8080
 fi
 
-# Start apache
-echo "Starting Apache"
-httpd -D FOREGROUND &
-pid="$!"
 trap "echo 'Stopping Magento - pid: $pid'; kill -SIGTERM $pid" SIGINT SIGTERM
 
 # Install Magento on first run.
-if [ ! -e $MAGENTO_HOME/app/etc/env.php ]; then
-	echo "========Installing Magento========"
+#if [ ! -e $MAGENTO_HOME/app/etc/env.php ]; then
+if [ 1 ]; then
+	echo "========Installing Magento ========"
 	until install_magento; do
 		# TODO replace this, this is a very naive approach.
 		echo "Waiting for MariaDB"
 		sleep 10
 	done
-	
+
 	# Enable Redis for cache if redis hostname is supplied.
 	if [ "$REDIS_HOST" != "" ]; then
 		enable_redis
@@ -146,21 +143,28 @@ if [ ! -e $MAGENTO_HOME/app/etc/env.php ]; then
 	# Secure permisions
 	echo "running chmod 500 on /magento/app/etc"
 	chmod 500 $MAGENTO_HOME/app/etc
+	
+	echo "running chmod 777 on /magento/pub/media"
+	chmod 777 -R $MAGENTO_HOME/pub/media
+	cd $MAGENTO_HOME/pub/media
+	chmod 777 -R *
+	
 else
 	echo "Magento is already installed."
 fi
 
+chmod 777 -R $MAGENTO_HOME/*
+chmod 777 -R /mag/htdocs/var/cache/
+
 compile_sass
 set_magento_mode
 
-# Run the cron job every 1 minute
 while :; do
 	magento cron:run | grep -v "Ran jobs by schedule"
+	chmod 777 -R /mag/htdocs/var/cache/
+	echo "Set CHMOD to 777"
 	sleep 60
 done &
+php-fpm
 
-# Wait for process to end.
-while kill -0 $pid >/dev/null 2>&1; do
-	wait
-done
 echo "Exiting"

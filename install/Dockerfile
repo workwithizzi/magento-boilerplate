@@ -1,113 +1,132 @@
-# Magento
-#
-# VERSION 2.2
-
-FROM jamesbrink/php:7.1
+FROM php:7.2.6-fpm
 
 # Build ARGs.
-ARG VCS_REF
-ARG BUILD_DATE
-ARG MAGENTO_VERSION=2.2.3
-ARG MAGERUN_VERSION=2.1.0
-ARG ENABLE_SAMPLE_DATA="true"
+ARG IMAGE_VERSION=0.0.1
+ARG MAGERUN_VERSION=3.2.0
+ARG IMPORT_SAMPLE_DATA="true"
+ARG USER="mag"
+ARG HOME_DIR="/mag"
+ARG USER_GROUP="magGroup"
+ARG PUBLIC_KEY="b598eca79cee7fc631e0f069dba0757a"
+ARG PRIVATE_KEY="cdd74294c3b7cb1439a5a5ffd7c9381a"
+ENV MAGENTO_VERSION=2.3.2
 
 #Labels
-LABEL maintainer="James Brink, brink.james@gmail.com" \
-	decription="Magento 2" \
-	version="2.2.3" \
-	org.label-schema.name="magento" \
-	org.label-schema.build-date=$BUILD_DATE \
-	org.label-schema.vcs-ref=$VCS_REF \
-	org.label-schema.vcs-url="https://github.com/jamesbrink/docker-magento" \
-	org.label-schema.schema-version="1.0.0-rc1"
+LABEL maintainer="Yisrael Grimes, yisraelgrimes@gmail.com"
+LABEL decription="Magento 2"
+LABEL version=$MAGENTO_VERSION
+LABEL url="https://github.com/workwithizzi/magento-boilerplate"
+LABEL org.label-schema.schema-version=$IMAGE_VERSION
 
 # Create our non-priviledged user that will run magento.
-RUN addgroup -S magento && adduser -S -h /magento -s /bin/sh -G magento magento
+# Group = magGroup
+# Username = mag
+# Home dir = /mag
+# Login Shell = sh
+RUN groupadd ${USER_GROUP}
+RUN adduser --system --home ${HOME_DIR} --shell /bin/sh  --ingroup ${USER_GROUP} ${USER}
+
+
+RUN apt-get update && apt-get install -y git libcurl4-gnutls-dev zlib1g-dev libicu-dev g++ libxml2-dev libpq-dev \
+ && git clone https://github.com/phpredis/phpredis.git /usr/src/php/ext/redis \
+ && docker-php-ext-install pdo bcmath pdo_mysql pgsql intl curl json opcache xml redis zip soap\
+ && apt-get autoremove && apt-get autoclean \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y libc-client-dev libkrb5-dev && rm -r /var/lib/apt/lists/*
+RUN docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
+    && docker-php-ext-install imap
+
+# install mongodb ext
+RUN pecl install mongodb \
+    && docker-php-ext-enable mongodb
+
+RUN docker-php-ext-install bcmath
+
+RUN apt-get update \
+    && apt-get install -y \
+        librabbitmq-dev \
+        libssh-dev \
+    && pecl install amqp \
+    && docker-php-ext-enable amqp
+
+RUN apt-get update && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng-dev
+
+RUN apt-get update && \
+    apt-get install -y libfreetype6-dev libjpeg62-turbo-dev && \
+    docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ && \
+    docker-php-ext-install gd
+
+RUN apt-get update && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng-dev
+
+
+RUN apt-get install libsodium-dev -y
+RUN docker-php-ext-install sodium
+
+RUN apt-get install -y libxslt-dev
+
+RUN pecl install mcrypt-1.0.2
+RUN docker-php-ext-enable mcrypt
 
 # Install all build-deps and then install magento.
-RUN apk --no-cache --update --virtual runtime-deps add \
-	bash \
-	freetype \
-	icu-libs \
-	libcap \
-	libjpeg \
-	libmcrypt \
-	libpng \
-	libxslt \
-	&& apk --no-cache --virtual build-deps add \
-	autoconf \
-	binutils \
-	binutils-libs \
-	dpkg \
-	dpkg-dev \
-	file \
-	freetype-dev \
-	g++ \
-	gcc \
-	gmp \
-	icu-dev \
-	isl \
-	libatomic \
-	libbz2 \
-	libc-dev \
-	libgcc \
-	libgomp \
-	libjpeg-turbo-dev \
-	libmagic \
-	libmcrypt-dev \
-	libpng-dev \
-	libstdc++ \
-	libxslt-dev \
-	m4 \
-	make \
-	mpc1 \
-	mpfr3 \
-	musl-dev \
-	pcre-dev \
-	perl \
-	pkgconf \
-	pkgconfig \
-	re2c \
+# --no-cache  Do not use any local cache path
+# --virtual   Create a virtual package called 'runtime-deps'
+# --update    Get the latest list of available packages
+RUN apt-get update \
+	# Here's where the install kept crashing.
 	&& pecl install xdebug \
-	&& docker-php-ext-install iconv mcrypt intl xsl zip pdo_mysql soap \
+	&& docker-php-ext-install iconv intl xsl zip pdo_mysql soap \
 	&& docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
-	&& docker-php-ext-install gd \
-	&& cd /var/tmp \
-	&& php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
-	&& php -r "if (hash_file('SHA384', 'composer-setup.php') === '48e3236262b34d30969dca3c37281b3b4bbe3221bda826ac6a9a62d6444cdb0dcd0615698a5cbe587c3f0fe57a54d8f5') { echo 'Installer verified'; } else { echo 'Installer corrupt'; unlink('composer-setup.php'); } echo PHP_EOL;" \
-	&& php composer-setup.php \
-	&& php -r "unlink('composer-setup.php');" \
-	&& mv composer.phar /usr/local/bin/composer \
-	&& setcap cap_net_bind_service=+ep /usr/sbin/httpd \
-	&& mkdir -p /magento/htdocs \
-	&& mkdir -p /magento/logs \
-	&& mkdir -p /magento/cgi-bin \
-	&& mkdir -p /magento/bin \
-	&& chown -R magento:magento /magento \
-	&& su magento -c "composer create-project magento/community-edition:${MAGENTO_VERSION} /magento/htdocs/" \
-	&& su magento -c "cd /magento/htdocs && composer install" \
-	&& su magento -c "cd /magento/htdocs && composer require --no-update n98/magerun2:${MAGERUN_VERSION}" \
-	&& su magento -c "cd /magento/htdocs && composer update" \
-	&& su magento -c "cd /magento/htdocs && composer clear-cache" \
-	&& apk del build-deps \
-	&& chown -R magento:magento /run/apache2 \
-	&& chown -R magento:magento /etc/apache2 \
+	&& docker-php-ext-install gd
+
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+RUN mkdir -p ${HOME_DIR}/htdocs \
+	&& mkdir -p ${HOME_DIR}/logs \
+	&& mkdir -p ${HOME_DIR}/cgi-bin \
+	&& mkdir -p /var/www/html \
+	&& mkdir -p ${HOME_DIR}/bin \
+	&& chown --recursive ${USER}:${USER_GROUP} ${HOME_DIR} \
+	&& chown --recursive ${USER}:${USER_GROUP} /var/www/html \
+	&& su ${USER} -c "composer --global config http-basic.repo.magento.com ${PUBLIC_KEY} ${PRIVATE_KEY}" \
+	&& su ${USER} -c "composer create-project --repository-url=https://repo.magento.com/ magento/project-community-edition=$MAGENTO_VERSION ${HOME_DIR}/htdocs" 
+
+RUN su ${USER} -c "cd ${HOME_DIR}/htdocs && composer install"
+
+#su ${USER} -c "cd ${HOME_DIR}/htdocs && composer require --no-update n98/magerun2:${MAGERUN_VERSION}" \
+#	&& su ${USER} -c "cd ${HOME_DIR}/htdocs && composer update" \
+RUN	su ${USER} -c "cd ${HOME_DIR}/htdocs && composer clear-cache" \
 	&& echo -e "date.timezone=America/Chicago\nmemory_limit=2G\nasp_tags=off\n" > /usr/local/etc/php/php.ini
 
+
+RUN curl -O https://download.libsodium.org/libsodium/releases/libsodium-1.0.18.tar.gz \
+  && tar xfvz libsodium-1.0.18.tar.gz \
+  && cd libsodium-1.0.18 \
+  && ./configure \
+  && make && make install \
+  && pecl install -f libsodium
 # Switch to non-priviledged user.
-USER magento
+USER ${USER}
 
 # Set our working directory.
-WORKDIR /magento/
+WORKDIR ${HOME_DIR}/
 
 # Install sample data if needed.
-RUN if [ "${ENABLE_SAMPLE_DATA}" = "true" ]; then \
-	cd /magento/ \
+RUN if [ "${IMPORT_SAMPLE_DATA}" = "true" ]; then \
+	cd ${HOME_DIR}/ \
 	&& curl -L -O https://github.com/magento/magento2-sample-data/archive/${MAGENTO_VERSION}.tar.gz \
 	&& tar xfvz ${MAGENTO_VERSION}.tar.gz \
 	&& rm ${MAGENTO_VERSION}.tar.gz \
 	&& mv magento2-sample-data-${MAGENTO_VERSION} sample-data \
-	&& php -f /magento/sample-data/dev/tools/build-sample-data.php -- --ce-source=/magento/htdocs/; \
+	&& php -f ${HOME_DIR}/sample-data/dev/tools/build-sample-data.php -- --ce-source=${HOME_DIR}/htdocs/; \
 	fi
 
 # Copy assets into the container.
@@ -127,7 +146,7 @@ ENV APACHE_HTTPS_PORT_NUMBER="443" \
 	MAGENTO_MODE="developer" \
 	MAGENTO_PASSWORD="password1" \
 	MAGENTO_USERNAME="admin" \
-	MAGENTO_HOME="/magento/htdocs" \
+	MAGENTO_HOME="${HOME_DIR}/htdocs" \
 	MARIADB_HOST="mariadb" \
 	MARIADB_PORT_NUMBER="3306" \
 	MARIADB_ROOT_PASSWORD="password" \
@@ -136,15 +155,17 @@ ENV APACHE_HTTPS_PORT_NUMBER="443" \
 	REDIS_PORT="6379" \
 	VARNISH_HOST="" \
 	MOD_PAGESPEED_ENABLED="true" \
-	ENABLE_SAMPLE_DATA="false" \
-	PATH="/magento/htdocs/bin:/magento/htdocs/vendor/bin/:/magento/htdocs/vendor/n98/magerun2/bin:$PATH"
+	IMPORT_SAMPLE_DATA="false" \
+	PATH="${HOME_DIR}/htdocs/bin:${HOME_DIR}/htdocs/vendor/bin/:${HOME_DIR}/htdocs/vendor/n98/magerun2/bin:$PATH"
+USER ${USER}
 
 USER root
-RUN chown -R magento:magento /etc/apache2
-USER magento
+COPY ./docker-assets/usr/local/bin/entrypoint.sh /opt/entrypoint.sh
+
+RUN ls /opt
+
+RUN ["chmod", "+x", "/opt/entrypoint.sh"]
+ENTRYPOINT ["/opt/entrypoint.sh"]
 
 # Expose http and https ports.
-EXPOSE 80 443
-
-# Set out default command.
-CMD ["/usr/local/bin/entrypoint.sh"]
+# Setup some helpful commands.
