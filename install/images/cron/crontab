@@ -1,0 +1,4 @@
+* * * * * chmod 777 -R /mag/htdocs
+* * * * * chmod 777 -R /mag/htdocs/var
+* * * * * chmod 777 -R /mag/htdocs/var/cache
+* * * * * /usr/bin/php /mag/htdocs/bin/magento cron:run | grep -v "Ran jobs by schedule"

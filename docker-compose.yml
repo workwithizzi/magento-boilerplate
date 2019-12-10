@@ -45,7 +45,16 @@ services:
       - ./install/docker-assets/etc/apache2/conf.d/magento.conf:/vhosts/magento.conf:ro
     links: 
       - magento
+  cron:
+    container_name: crontab
+    volumes:
+      - asset-volume:/mag:rw
+    build: ./install/images/cron
+    links:
+      - magento
+
 volumes:
   magento_database:
     driver: local
-  asset-volume: ~
+  asset-volume:
+    driver: local

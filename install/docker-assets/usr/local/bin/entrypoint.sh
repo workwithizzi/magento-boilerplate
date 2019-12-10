@@ -158,13 +158,6 @@ chmod 777 -R /mag/htdocs/var/cache/
 
 compile_sass
 set_magento_mode
-
-while :; do
-	magento cron:run | grep -v "Ran jobs by schedule"
-	chmod 777 -R /mag/htdocs/var/cache/
-	echo "Set CHMOD to 777"
-	sleep 60
-done &
 php-fpm
 
 echo "Exiting"
